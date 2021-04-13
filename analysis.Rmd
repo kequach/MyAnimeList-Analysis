@@ -1,0 +1,29 @@
+---
+title: "Analysis"
+author: "Keven Quach"
+date: "4/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(arules)
+```
+
+## R Markdown
+
+### Only clean data will be used (less entrants than filtered) as even further filtering will be applied.
+```{r import data}
+users_clean <- read.csv("data/users_filtered.csv")
+anime_clean <- read.csv("data/anime_filtered.csv")
+animelists_clean <- read.csv("data/animelists_filtered.csv")
+```
+
+# Never touch the original data as the import takes forever
+```{r}
+users <- data.frame(users_clean)
+anime <- data.frame(anime_clean)
+animelists <- data.frame(animelists_clean)
+```
+
