@@ -9,21 +9,85 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(arules)
+library(corrplot)
+options(scipen = 100)
 ```
 
 ## R Markdown
 
 ### Only clean data will be used (less entrants than filtered) as even further filtering will be applied.
 ```{r import data}
-users_clean <- read.csv("data/users_filtered.csv")
-anime_clean <- read.csv("data/anime_filtered.csv")
-animelists_clean <- read.csv("data/animelists_filtered.csv")
+users <- read.csv("data/users_filtered.csv")
+anime <- read.csv("data/anime_filtered.csv")
+animelists <- read.csv("data/animelists_filtered.csv")
 ```
 
-# Never touch the original data as the import takes forever
+
 ```{r}
-users <- data.frame(users_clean)
-anime <- data.frame(anime_clean)
-animelists <- data.frame(animelists_clean)
+users <- users %>% select(username, user_id, user_completed, gender, stats_mean_score)
+anime <- anime %>% select(anime_id, title, type, episodes, status, rating, score, scored_by, rank, popularity, favorites, genre)
+animelists <- animelists %>% select(username, anime_id, my_watched_episodes, my_score, my_status)
+save.image(file="clean.RData")
+```
+
+my_status in animelists tables contains integer values. This is their semantics:
+
+1: watching
+2: completed
+3: on hold
+4: dropped
+6: plan to watch
+--> only watching, completed, on hold, dropped are relevant
+
+# More filtering
+```{r}
+
+users <- users %>% filter(user_completed >= 10)
+anime <- anime %>% filter(status == "Finished Airing")
+animelists <- animelists %>% filter(my_status != 6)
+```
+```{r}
+users$gender <- as.factor(users$gender)
+anime$type <- as.factor(anime$type)
+anime$status <- as.factor(anime$status)
+anime$rating <- as.factor(anime$rating)
+
+str(users)
+str(anime)
+str(animelists)
+```
+# Concerning the report, this should be a 2-4 pages summary where you describe the task, your approach to it, how you evaluate it, and the results. I expect at least a live demo at the end of your project - of course, creating a recommendation web app would be a nice bonus, but only if you have time.
+# descriptive analytics/visualisation and frequent itemset mining
+
+# Descriptive plots 
+```{r}
+anime_grouped_rating <- anime %>% 
+  group_by(rating) %>% 
+  summarise(scored_by = sum(scored_by), favorites = sum(favorites)) 
+anime_grouped_rating <- anime_grouped_rating[c(1,4,3,5,6,7),]
+anime_grouped_rating$rating <- factor(anime_grouped_rating$rating, levels = anime_grouped_rating$rating)
+anime_grouped_rating %>% 
+  ggplot(aes(rating, scored_by)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Number of anime scored - grouped by age ratings") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+# anime_grouped_rating %>% 
+#   ggplot(aes(rating, favorites)) +
+#   geom_bar(stat = "identity") +
+#   ggtitle("Number of anime favorited - grouped by age ratings") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+cor <- anime %>% select(episodes, score, scored_by, rank, popularity, favorites) %>% cor(use ="complete.obs")
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(cor, method="color", col=col(200),  
+     diag=FALSE, # tl.pos="d", 
+         type="upper", order="hclust", 
+     title="Correlation matrix of anime variables", 
+         addCoef.col = "black", # Add coefficient of correlation
+         # Combine with significance
+         # hide correlation coefficient on the principal diagonal
+     mar=c(0,0,1,0) # http://stackoverflow.com/a/14754408/54964
+         )
 ```
 
