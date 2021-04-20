@@ -4,7 +4,7 @@ data/
   
 .Rproj.user
 .Rhistory
-.RData
+*.RData
 .DS_Store
 inst/doc
 doc
