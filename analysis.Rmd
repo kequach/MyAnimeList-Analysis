@@ -9,7 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(arules)
+library(arulesViz)
 library(corrplot)
+library(RColorBrewer)
 options(scipen = 100)
 ```
 
@@ -17,9 +19,9 @@ options(scipen = 100)
 
 ### Only clean data will be used (less entrants than filtered) as even further filtering will be applied.
 ```{r import data}
-users <- read.csv("data/users_filtered.csv")
-anime <- read.csv("data/anime_filtered.csv")
-animelists <- read.csv("data/animelists_filtered.csv")
+users <- read.csv("data/users_filtered.csv", encoding="UTF-8")
+anime <- read.csv("data/anime_filtered.csv", encoding="UTF-8")
+animelists <- read.csv("data/animelists_filtered.csv", encoding="UTF-8")
 ```
 
 
@@ -27,7 +29,7 @@ animelists <- read.csv("data/animelists_filtered.csv")
 users <- users %>% select(username, user_id, user_completed, gender, stats_mean_score)
 anime <- anime %>% select(anime_id, title, type, episodes, status, rating, score, scored_by, rank, popularity, favorites, genre)
 animelists <- animelists %>% select(username, anime_id, my_watched_episodes, my_score, my_status)
-save.image(file="clean.RData")
+#save.image(file="clean.RData")
 ```
 
 my_status in animelists tables contains integer values. This is their semantics:
@@ -37,15 +39,16 @@ my_status in animelists tables contains integer values. This is their semantics:
 3: on hold
 4: dropped
 6: plan to watch
---> only watching, completed, on hold, dropped are relevant
+--> only completed anime are relevant
 
 # More filtering
 ```{r}
 
 users <- users %>% filter(user_completed >= 10)
 anime <- anime %>% filter(status == "Finished Airing")
-animelists <- animelists %>% filter(my_status != 6)
+animelists <- animelists %>% filter(my_status == 2)
 ```
+
 ```{r}
 users$gender <- as.factor(users$gender)
 anime$type <- as.factor(anime$type)
@@ -90,4 +93,43 @@ corrplot(cor, method="color", col=col(200),
      mar=c(0,0,1,0) # http://stackoverflow.com/a/14754408/54964
          )
 ```
+# Transform to transaction format for arules
+```{r}
+transactions_df = merge(x = animelists[ , c("anime_id", "username")], y = anime[ , c("anime_id", "title")], by = "anime_id")
+transactions_df$anime_id <- NULL
+#ddply(dataframe, variables_to_be_used_to_split_data_frame, function_to_be_applied)
+transaction_data <- plyr::ddply(transactions_df,"username",
+                       function(df1)paste(df1$title,
+                       collapse = "|"))
+names(transaction_data)[names(transaction_data) == 'V1'] <- 'items'
+# more than 10 anime need to be in a transaction
+transaction_data <- transaction_data %>% filter(str_count(items, "\\|") >= 9)
+rm(transactions_df)
+
+write.csv(transaction_data$items,"data/transactions.csv", quote = FALSE, row.names = FALSE)
+
+```
+
+```{r}
+tr <- read.transactions("data/transactions.csv", format = 'basket', sep="|")
+
+summary(tr)
+itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.names=.75, main="Absolute Item Frequency Plot", ) 
+
+```
+```{r}
+association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.9,maxlen=4))
+summary(association.rules)
+inspect(association.rules[1:10])
+plot(association.rules)
+```
+
+
+```{r}
+str(animelists)
+rules <- apriori(animelists, parameter = list(supp = 0.5, conf = 0.9, target = "rules"))
+summary(rules)
+inspect(head(rules, by = "lift"))
+```
+
 
