@@ -12,6 +12,7 @@ library(arules)
 library(arulesViz)
 library(corrplot)
 library(RColorBrewer)
+library(stringr)
 options(scipen = 100)
 ```
 
@@ -104,6 +105,7 @@ transaction_data <- plyr::ddply(transactions_df,"username",
 names(transaction_data)[names(transaction_data) == 'V1'] <- 'items'
 # more than 10 anime need to be in a transaction
 transaction_data <- transaction_data %>% filter(str_count(items, "\\|") >= 9)
+transaction_data <- transaction_data %>% filter(str_count(items, "\\|") <= 300)
 rm(transactions_df)
 
 write.csv(transaction_data$items,"data/transactions.csv", quote = FALSE, row.names = FALSE)
@@ -118,12 +120,43 @@ itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.n
 
 ```
 ```{r}
-association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.9,maxlen=4))
+association.rules <- apriori(tr, parameter = list(supp=0.1, conf=0.9,maxlen=10))
 summary(association.rules)
 inspect(association.rules[1:10])
-plot(association.rules)
-```
 
+
+rules_df = data.frame(
+  lhs = labels(lhs(association.rules)),
+  rhs = labels(rhs(association.rules)), 
+  association.rules@quality)
+
+fillwords <- c("no", "to", "of", "wa", "the")
+flag_same_series <- function(df) {
+  #print(df)
+  # clean titles for common symbols and fillwords
+  lhs <- str_trim(str_replace_all(tolower(df["lhs"]), "\\{|\\}|\\.|\\!|\\:|\\,", " "))
+  rhs <- str_trim(str_replace_all(tolower(df["rhs"]), "\\{|\\}|\\.|\\!|\\:|\\,", " "))
+  lhs_array <- str_split(lhs, " ")[[1]]
+  rhs_array <- str_split(rhs, " ")[[1]]
+  lhs_array = lhs_array[!(lhs_array %in% fillwords)]
+  rhs_array = rhs_array[!(rhs_array %in% fillwords)]
+  any(lhs_array %in% rhs_array)
+}
+
+#flag_same_series(head(select(rules_df, c("lhs", "rhs")),1))
+flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
+#flags_series <- apply(X = head(select(rules_df, c("lhs", "rhs")),50), MARGIN = 1, flag_same_series)
+rules_df["is_series"] <- flags_series
+filtered.rules <- association.rules[-which(flags_series == TRUE, arr.ind=TRUE)]
+inspect(filtered.rules[1:10])
+summary(filtered.rules)
+
+plot(association.rules)
+plot(filtered.rules)
+
+
+```
+{Love Live! School Idol Project 2nd Season Recap}
 
 ```{r}
 str(animelists)
