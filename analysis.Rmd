@@ -29,7 +29,7 @@ animelists <- read.csv("data/animelists_filtered.csv", encoding="UTF-8")
 ```{r}
 users <- users %>% select(username, user_id, user_completed, gender, stats_mean_score)
 anime <- anime %>% select(anime_id, title, type, episodes, status, rating, score, scored_by, rank, popularity, favorites, genre)
-animelists <- animelists %>% select(username, anime_id, my_watched_episodes, my_score, my_status)
+animelists <- animelists %>% select(username, anime_id, my_finish_date, my_last_updated, my_status)
 #save.image(file="clean.RData")
 ```
 
@@ -47,7 +47,7 @@ my_status in animelists tables contains integer values. This is their semantics:
 
 users <- users %>% filter(user_completed >= 10)
 anime <- anime %>% filter(status == "Finished Airing")
-animelists <- animelists %>% filter(my_status == 2)
+animelists <- animelists %>% filter(my_status == 2) %>% filter(my_last_updated != 0) %>% arrange(my_last_updated)
 ```
 
 ```{r}
@@ -119,17 +119,8 @@ summary(tr)
 itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.names=.75, main="Absolute Item Frequency Plot", ) 
 
 ```
+
 ```{r}
-association.rules <- apriori(tr, parameter = list(supp=0.1, conf=0.9,maxlen=10))
-summary(association.rules)
-inspect(association.rules[1:10])
-
-
-rules_df = data.frame(
-  lhs = labels(lhs(association.rules)),
-  rhs = labels(rhs(association.rules)), 
-  association.rules@quality)
-
 fillwords <- c("no", "to", "of", "wa", "the")
 flag_same_series <- function(df) {
   #print(df)
@@ -143,18 +134,59 @@ flag_same_series <- function(df) {
   any(lhs_array %in% rhs_array)
 }
 
-#flag_same_series(head(select(rules_df, c("lhs", "rhs")),1))
+get_rules_df <- function (rules) {
+  data.frame(
+  lhs = labels(lhs(rules)),
+  rhs = labels(rhs(rules)), 
+  rules@quality)
+} 
+get_recommendations <- function(title, tr, supp, conf) {
+  rules_rhs <- apriori(tr, parameter = list(supp=supp, conf=conf, maxlen = 2),appearance = list(default="lhs",rhs=title))
+  rules_lhs <- apriori(tr, parameter = list(supp=supp, conf=conf, maxlen = 2),appearance = list(default="rhs",lhs=title))
+  rules <- c(rules_rhs, rules_lhs)
+  rules_df <- get_rules_df(rules)
+  flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
+  filtered.rules <- rules[-which(flags_series == TRUE, arr.ind=TRUE)]
+  summary(rules)
+  summary(filtered.rules)
+  inspect(filtered.rules)
+  filtered.rules
+}
+```
+
+
+```{r}
+association.rules <- apriori(tr, parameter = list(supp=0.0001, conf=0.7,maxlen=2))
+summary(association.rules)
+inspect(association.rules[1:10])
+
+rules_df <- get_rules_df(association.rules)
 flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
-#flags_series <- apply(X = head(select(rules_df, c("lhs", "rhs")),50), MARGIN = 1, flag_same_series)
-rules_df["is_series"] <- flags_series
 filtered.rules <- association.rules[-which(flags_series == TRUE, arr.ind=TRUE)]
 inspect(filtered.rules[1:10])
 summary(filtered.rules)
 
 plot(association.rules)
 plot(filtered.rules)
+plot(head(filtered.rules, n = 100, by = "confidence"), method = "graph", engine = "htmlwidget")
+```
+lt&039
 
 
+```{r}
+single_rules <- get_recommendations("Prison School", tr, 0.0001, 0.7)
+single_rules <- get_recommendations("Baki", tr, 0.0001, 0.5)
+inspect(single_rules)
+# naruto_rules <- apriori(tr, parameter = list(supp=0.0001, conf=0.5, maxlen = 2),appearance = list(default="lhs",rhs="Prison School"))
+# 
+# rules_df = data.frame(
+#   lhs = labels(lhs(naruto_rules)),
+#   rhs = labels(rhs(naruto_rules)), 
+#   naruto_rules@quality)
+# flags_series_naruto <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
+# filtered.rules <- naruto_rules[-which(flags_series_naruto == TRUE, arr.ind=TRUE)]
+# inspect(naruto_rules)
+# summary(filtered.rules)
 ```
 {Love Live! School Idol Project 2nd Season Recap}
 
