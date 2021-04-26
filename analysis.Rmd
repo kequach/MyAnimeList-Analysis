@@ -96,8 +96,10 @@ corrplot(cor, method="color", col=col(200),
 ```
 # Transform to transaction format for arules
 ```{r}
-transactions_df = merge(x = animelists[ , c("anime_id", "username")], y = anime[ , c("anime_id", "title")], by = "anime_id")
+transactions_df <- merge(x = animelists[ , c("anime_id", "username", "my_last_updated")], y = anime[ , c("anime_id", "title")], by = "anime_id")
+transactions_df <- transactions_df %>% arrange(my_last_updated) 
 transactions_df$anime_id <- NULL
+transactions_df$my_last_updated <- NULL
 #ddply(dataframe, variables_to_be_used_to_split_data_frame, function_to_be_applied)
 transaction_data <- plyr::ddply(transactions_df,"username",
                        function(df1)paste(df1$title,
@@ -105,7 +107,7 @@ transaction_data <- plyr::ddply(transactions_df,"username",
 names(transaction_data)[names(transaction_data) == 'V1'] <- 'items'
 # more than 10 anime need to be in a transaction
 transaction_data <- transaction_data %>% filter(str_count(items, "\\|") >= 9)
-transaction_data <- transaction_data %>% filter(str_count(items, "\\|") <= 300)
+#transaction_data <- transaction_data %>% filter(str_count(items, "\\|") <= 300)
 rm(transactions_df)
 
 write.csv(transaction_data$items,"data/transactions.csv", quote = FALSE, row.names = FALSE)
@@ -141,22 +143,21 @@ get_rules_df <- function (rules) {
   rules@quality)
 } 
 get_recommendations <- function(title, tr, supp, conf) {
-  rules_rhs <- apriori(tr, parameter = list(supp=supp, conf=conf, maxlen = 2),appearance = list(default="lhs",rhs=title))
-  rules_lhs <- apriori(tr, parameter = list(supp=supp, conf=conf, maxlen = 2),appearance = list(default="rhs",lhs=title))
+  rules_rhs <- apriori(tr, parameter = list(supp=supp, conf=conf, minlen=2, maxlen = 2),appearance = list(default="lhs",rhs=title))
+  rules_lhs <- apriori(tr, parameter = list(supp=supp, conf=conf, minlen=2, maxlen = 2),appearance = list(default="rhs",lhs=title))
   rules <- c(rules_rhs, rules_lhs)
   rules_df <- get_rules_df(rules)
   flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
   filtered.rules <- rules[-which(flags_series == TRUE, arr.ind=TRUE)]
-  summary(rules)
-  summary(filtered.rules)
-  inspect(filtered.rules)
+  print(rules)
+  print(filtered.rules)
   filtered.rules
 }
 ```
 
 
 ```{r}
-association.rules <- apriori(tr, parameter = list(supp=0.0001, conf=0.7,maxlen=2))
+association.rules <- apriori(tr, parameter = list(supp=0.01, conf=0.7, minlen=2, maxlen=2))
 summary(association.rules)
 inspect(association.rules[1:10])
 
@@ -170,31 +171,19 @@ plot(association.rules)
 plot(filtered.rules)
 plot(head(filtered.rules, n = 100, by = "confidence"), method = "graph", engine = "htmlwidget")
 ```
-lt&039
+
 
 
 ```{r}
-single_rules <- get_recommendations("Prison School", tr, 0.0001, 0.7)
-single_rules <- get_recommendations("Baki", tr, 0.0001, 0.5)
+title <- "Prison School"
+single_rules <- get_recommendations(title, tr, 0.01, 0.7)
 inspect(single_rules)
-# naruto_rules <- apriori(tr, parameter = list(supp=0.0001, conf=0.5, maxlen = 2),appearance = list(default="lhs",rhs="Prison School"))
-# 
-# rules_df = data.frame(
-#   lhs = labels(lhs(naruto_rules)),
-#   rhs = labels(rhs(naruto_rules)), 
-#   naruto_rules@quality)
-# flags_series_naruto <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
-# filtered.rules <- naruto_rules[-which(flags_series_naruto == TRUE, arr.ind=TRUE)]
-# inspect(naruto_rules)
-# summary(filtered.rules)
+plot(single_rules, engine="plotly")
 ```
-{Love Live! School Idol Project 2nd Season Recap}
+
+
 
 ```{r}
-str(animelists)
-rules <- apriori(animelists, parameter = list(supp = 0.5, conf = 0.9, target = "rules"))
-summary(rules)
-inspect(head(rules, by = "lift"))
 ```
 
 
