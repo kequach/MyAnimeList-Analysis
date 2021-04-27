@@ -76,17 +76,10 @@ anime_grouped_rating$rating <- factor(anime_grouped_rating$rating, levels = anim
 anime_grouped_rating %>% 
   ggplot(aes(rating, scored_by)) +
   geom_bar(stat = "identity") +
-  # ggtitle("Number of anime scored - grouped by age ratings") +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 15, hjust = 1, size=14)) +
   xlab("Rating") + ylab("Number of people scored")+
   ggsave("plots/scored_by_rating.png")
-
-# anime_grouped_rating %>% 
-#   ggplot(aes(rating, favorites)) +
-#   geom_bar(stat = "identity") +
-#   ggtitle("Number of anime favorited - grouped by age ratings") +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
 
 cor <- anime %>% select(episodes, score, scored_by, rank, popularity, favorites) %>% cor(use ="complete.obs")
 col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
@@ -125,14 +118,13 @@ transactions_df <- merge(x = animelists[ , c("anime_id", "username", "my_last_up
 transactions_df <- transactions_df %>% arrange(my_last_updated) 
 transactions_df$anime_id <- NULL
 transactions_df$my_last_updated <- NULL
-#ddply(dataframe, variables_to_be_used_to_split_data_frame, function_to_be_applied)
+
 transaction_data <- plyr::ddply(transactions_df,"username",
                        function(df1)paste(df1$title,
                        collapse = "|"))
 names(transaction_data)[names(transaction_data) == 'V1'] <- 'items'
 # more than 10 anime need to be in a transaction
 transaction_data <- transaction_data %>% filter(str_count(items, "\\|") >= 9)
-#transaction_data <- transaction_data %>% filter(str_count(items, "\\|") <= 300)
 rm(transactions_df)
 
 write.csv(transaction_data$items,"data/transactions.csv", quote = FALSE, row.names = FALSE)
@@ -151,7 +143,6 @@ itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.n
 fillwords <- c("no", "to", "of", "wa", "the")
 symbols <- "\\{|\\}|\\.|\\!|\\:|\\,|\\/|\\/|'"
 flag_same_series <- function(df) {
-  #print(df)
   # clean titles for common symbols and fillwords
   lhs <- str_trim(str_replace_all(tolower(df["lhs"]), symbols, " "))
   rhs <- str_trim(str_replace_all(tolower(df["rhs"]), symbols, " "))
