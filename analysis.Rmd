@@ -13,6 +13,7 @@ library(arulesViz)
 library(corrplot)
 library(RColorBrewer)
 library(stringr)
+library(xtable)
 options(scipen = 100)
 ```
 
@@ -48,6 +49,7 @@ my_status in animelists tables contains integer values. This is their semantics:
 users <- users %>% filter(user_completed >= 10)
 anime <- anime %>% filter(status == "Finished Airing")
 animelists <- animelists %>% filter(my_status == 2) %>% filter(my_last_updated != 0) %>% arrange(my_last_updated)
+
 ```
 
 ```{r}
@@ -55,6 +57,7 @@ users$gender <- as.factor(users$gender)
 anime$type <- as.factor(anime$type)
 anime$status <- as.factor(anime$status)
 anime$rating <- as.factor(anime$rating)
+anime$title <- HTMLdecode(anime$title)
 
 str(users)
 str(anime)
@@ -73,8 +76,11 @@ anime_grouped_rating$rating <- factor(anime_grouped_rating$rating, levels = anim
 anime_grouped_rating %>% 
   ggplot(aes(rating, scored_by)) +
   geom_bar(stat = "identity") +
-  ggtitle("Number of anime scored - grouped by age ratings") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  # ggtitle("Number of anime scored - grouped by age ratings") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 15, hjust = 1, size=14)) +
+  xlab("Rating") + ylab("Number of people scored")+
+  ggsave("plots/scored_by_rating.png")
 
 # anime_grouped_rating %>% 
 #   ggplot(aes(rating, favorites)) +
@@ -87,12 +93,31 @@ col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA")
 corrplot(cor, method="color", col=col(200),  
      diag=FALSE, # tl.pos="d", 
          type="upper", order="hclust", 
-     title="Correlation matrix of anime variables", 
+     #title="Correlation matrix of anime variables", 
          addCoef.col = "black", # Add coefficient of correlation
          # Combine with significance
          # hide correlation coefficient on the principal diagonal
      mar=c(0,0,1,0) # http://stackoverflow.com/a/14754408/54964
          )
+
+
+# Change density plot line colors by groups
+ggplot(users, aes(x=stats_mean_score, color=gender)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  geom_density() +
+  theme_minimal(base_size = 14) +
+  xlab("Average score") + ylab("Density")+
+  theme(legend.position=c(0.1, 0.8)) +
+  ggsave("plots/density_mean_score.png")
+
+ggplot(users, aes(x=user_completed, color=gender)) + 
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  stat_ecdf(geom = "step") +
+  theme_minimal(base_size = 14) +
+  xlab("Number of completed anime") + ylab("Percent")+
+  theme(legend.position=c(0.9, 0.2), plot.margin = unit(c(0,.5,0,0), "cm")) +
+  ggsave("plots/cdf_completed_anime.png")
+sum(users$user_completed >= 1000)
 ```
 # Transform to transaction format for arules
 ```{r}
@@ -115,20 +140,21 @@ write.csv(transaction_data$items,"data/transactions.csv", quote = FALSE, row.nam
 ```
 
 ```{r}
-tr <- read.transactions("data/transactions.csv", format = 'basket', sep="|")
+tr <- read.transactions("data/transactions.csv", format = 'basket', sep="|", quote = "")
 
 summary(tr)
-itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.names=.75, main="Absolute Item Frequency Plot", ) 
+itemFrequencyPlot(tr,topN=20, type="relative",col=brewer.pal(8,'Pastel2'), cex.names=.75)
 
 ```
 
 ```{r}
 fillwords <- c("no", "to", "of", "wa", "the")
+symbols <- "\\{|\\}|\\.|\\!|\\:|\\,|\\/|\\/|'"
 flag_same_series <- function(df) {
   #print(df)
   # clean titles for common symbols and fillwords
-  lhs <- str_trim(str_replace_all(tolower(df["lhs"]), "\\{|\\}|\\.|\\!|\\:|\\,", " "))
-  rhs <- str_trim(str_replace_all(tolower(df["rhs"]), "\\{|\\}|\\.|\\!|\\:|\\,", " "))
+  lhs <- str_trim(str_replace_all(tolower(df["lhs"]), symbols, " "))
+  rhs <- str_trim(str_replace_all(tolower(df["rhs"]), symbols, " "))
   lhs_array <- str_split(lhs, " ")[[1]]
   rhs_array <- str_split(rhs, " ")[[1]]
   lhs_array = lhs_array[!(lhs_array %in% fillwords)]
@@ -149,27 +175,37 @@ get_recommendations <- function(title, tr, supp, conf) {
   rules_df <- get_rules_df(rules)
   flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
   filtered.rules <- rules[-which(flags_series == TRUE, arr.ind=TRUE)]
-  print(rules)
-  print(filtered.rules)
+  print(table(flags_series))
   filtered.rules
 }
 ```
 
 
 ```{r}
-association.rules <- apriori(tr, parameter = list(supp=0.01, conf=0.7, minlen=2, maxlen=2))
+association.rules <- apriori(tr, parameter = list(supp=0.1, conf=0.8, minlen=2, maxlen=2))
 summary(association.rules)
 inspect(association.rules[1:10])
 
 rules_df <- get_rules_df(association.rules)
 flags_series <- apply(X = select(rules_df, c("lhs", "rhs")), MARGIN = 1, flag_same_series)
 filtered.rules <- association.rules[-which(flags_series == TRUE, arr.ind=TRUE)]
-inspect(filtered.rules[1:10])
+
 summary(filtered.rules)
 
-plot(association.rules)
-plot(filtered.rules)
+png(filename="plots/rules_unfiltered.png") +
+plot(association.rules) +
+dev.off()
+
+png(filename="plots/rules_filtered.png") +
+plot(filtered.rules) +
+dev.off()
 plot(head(filtered.rules, n = 100, by = "confidence"), method = "graph", engine = "htmlwidget")
+
+plot(association.rules) +
+plot(filtered.rules) 
+xtable(head(get_rules_df(filtered.rules) %>% arrange(desc(lift)) %>% select(lhs, rhs, lift), 10))
+
+
 ```
 
 
@@ -179,6 +215,7 @@ title <- "Prison School"
 single_rules <- get_recommendations(title, tr, 0.01, 0.7)
 inspect(single_rules)
 plot(single_rules, engine="plotly")
+xtable(get_rules_df(single_rules) %>% arrange(desc(lift)) %>% select(lhs, rhs, lift))
 ```
 
 
